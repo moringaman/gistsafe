@@ -221,6 +221,49 @@ No sensitive information or secrets are ever stored in the cache.
 - Reduced GitHub API usage
 - Better performance for frequently accessed projects
 - Non-blocking operations for improved user experience
+
+## Security Disclaimer
+
+⚠️ **Important Security Notice**
+
+GistSafe is designed for development environments and personal projects. While we implement strong encryption practices and security measures, please note the following:
+
+### Limitations and Risks
+- GitHub Gists are used as the storage backend, making your secrets' availability dependent on GitHub's service
+- Access to encrypted secrets relies on GitHub authentication and personal access tokens
+- No built-in audit logging or compliance monitoring
+- Limited access control (based on GitHub's permissions)
+- No automatic secret rotation or expiration
+- No enterprise-grade backup or disaster recovery features
+
+### Not Recommended For
+- Production environments
+- Enterprise applications
+- Regulated industries (finance, healthcare, etc.)
+- Critical infrastructure
+- Applications requiring compliance (SOC2, HIPAA, PCI, etc.)
+
+### Recommended Alternatives for Production/Enterprise Use
+For production or enterprise environments, please consider using dedicated secret management solutions such as:
+- HashiCorp Vault
+- AWS Secrets Manager
+- Google Cloud Secret Manager
+- Azure Key Vault
+- 1Password for Teams
+- Doppler
+- Keeper Secrets Manager
+
+### Best Practices When Using GistSafe
+1. Use strong, unique passwords for each project
+2. Regularly rotate your GitHub tokens
+3. Never store production credentials
+4. Enable key obfuscation for sensitive data
+5. Use meaningful but secure password hints
+6. Regularly audit your gists and remove unused secrets
+7. Monitor GitHub account security (enable 2FA, review access)
+
+By using GistSafe, you acknowledge these limitations and accept responsibility for evaluating whether it meets your security requirements.
+
 ## TODO
 
 ### Security Enhancements
