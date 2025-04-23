@@ -1,0 +1,5 @@
+#!/bin/bash
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+VENV_DIR="$(dirname $SCRIPT_DIR)/.venv"
+source "$VENV_DIR/bin/activate"
+python "$(dirname $SCRIPT_DIR)/gistsafe.py" "$@"

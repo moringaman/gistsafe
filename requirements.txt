@@ -1,0 +1,5 @@
+PyGithub==2.1.1
+cryptography==42.0.5
+python-dotenv==1.0.1
+click==8.1.7
+rich==13.7.1 
