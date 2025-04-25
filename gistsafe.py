@@ -113,58 +113,132 @@ class GistSafe:
         """Load the cache from disk."""
         try:
             if os.path.exists(self.cache_file):
+                console.print(f"[yellow]Loading cache from: {self.cache_file}")
                 with self._cache_lock:
                     with open(self.cache_file, 'r') as f:
                         cache_data = json.load(f)
                         self.cache = cache_data.get('projects', {})
                         last_update = cache_data.get('last_update', 0)
+                        
+                        console.print(f"[green]Loaded {len(self.cache)} projects from cache")
+                        
                         # Cache expires after 1 hour
                         if time.time() - last_update > 3600:
                             console.print("[yellow]Cache is older than 1 hour, refreshing...")
-                            self.trigger_refresh_cache()
+                            self.cache = self._refresh_cache_sync()
             else:
-                self.trigger_refresh_cache()
+                console.print("[yellow]No cache file found, creating new cache...")
+                self.cache = self._refresh_cache_sync()
+        except json.JSONDecodeError as e:
+            console.print(f"[red]Error decoding cache file: {str(e)}")
+            console.print("[yellow]Refreshing cache due to corruption...")
+            self.cache = self._refresh_cache_sync()
         except Exception as e:
             console.print(f"[red]Error loading cache: {str(e)}")
+            console.print("[yellow]Starting with empty cache...")
             self.cache = {}
 
     def save_cache(self):
-        """Save the cache to disk."""
+        """Save the cache to disk with synchronous verification."""
         try:
-            with self._cache_lock:
-                cache_data = {
-                    'projects': self.cache,
-                    'last_update': time.time()
-                }
-                with open(self.cache_file, 'w') as f:
-                    json.dump(cache_data, f, indent=2)
+            # Ensure cache directory exists with explicit permissions
+            if not os.path.exists(self.cache_dir):
+                console.print(f"[yellow]Creating cache directory: {self.cache_dir}")
+                os.makedirs(self.cache_dir, mode=0o755, exist_ok=True)
+            
+            # Verify directory is writable
+            if not os.access(self.cache_dir, os.W_OK):
+                console.print(f"[red]Cache directory is not writable: {self.cache_dir}")
+                return False
+            
+            console.print(f"[yellow]Saving cache to: {self.cache_file}")
+            
+            # Prepare cache data
+            cache_data = {
+                'projects': self.cache,
+                'last_update': time.time()
+            }
+            
+            # Write to file
+            with open(self.cache_file, 'w') as f:
+                json.dump(cache_data, f, indent=2)
+            
+            # Verify the file exists and has content
+            if os.path.exists(self.cache_file):
+                size = os.path.getsize(self.cache_file)
+                if size > 0:
+                    console.print(f"[green]Cache saved successfully ({size} bytes)")
+                    # Verify we can read it back
+                    with open(self.cache_file, 'r') as f:
+                        test_read = json.load(f)
+                        if test_read.get('projects') == self.cache:
+                            console.print("[green]Cache verification successful")
+                            return True
+                        else:
+                            console.print("[red]Cache verification failed - content mismatch")
+                            return False
+                else:
+                    console.print("[red]Cache file is empty!")
+                    return False
+            else:
+                console.print("[red]Cache file was not created!")
+                return False
+                
+        except PermissionError as e:
+            console.print(f"[red]Permission denied when saving cache: {str(e)}")
+            console.print(f"[yellow]Cache directory: {self.cache_dir}")
+            console.print(f"[yellow]Cache file: {self.cache_file}")
+            console.print(f"[yellow]Current user: {os.getenv('USER')}")
+            return False
         except Exception as e:
             console.print(f"[red]Error saving cache: {str(e)}")
+            console.print(f"[yellow]Cache directory: {self.cache_dir}")
+            console.print(f"[yellow]Cache file: {self.cache_file}")
+            console.print(f"[yellow]Error type: {type(e).__name__}")
+            return False
 
-    def trigger_refresh_cache(self):
-        """Trigger an asynchronous cache refresh."""
-        # If a refresh is already in progress, don't start another one
-        if self._refresh_thread and self._refresh_thread.is_alive():
-            return
-
-        self._refresh_thread = threading.Thread(target=self._refresh_cache_async)
-        self._refresh_thread.daemon = True  # Thread will exit when main program exits
-        self._refresh_thread.start()
-
-    def _refresh_cache_async(self):
-        """Asynchronous cache refresh implementation."""
+    def _refresh_cache_sync(self):
+        """Synchronous cache refresh implementation."""
         console.print("[yellow]Refreshing project cache from GitHub...")
         new_cache = {}
         try:
-            gists = self.user.get_gists()
+            # Show rate limit info
+            rate_limit = self.gh.get_rate_limit()
+            remaining = rate_limit.core.remaining
+            reset_time = rate_limit.core.reset.strftime('%H:%M:%S')
+            console.print(f"[blue]GitHub API calls remaining: {remaining} (resets at {reset_time})")
             
+            # Get user's gists and filter by filename
+            gists = self.user.get_gists()
+            total_gists = 0
+            secret_gists_found = 0
+            
+            # Process gists but use filename filtering first
             for gist in gists:
-                for filename in gist.files.keys():
+                total_gists += 1
+                
+                # Quick check if any file matches our patterns before processing content
+                has_matching_file = any(
+                    '_gistsafe.json' in filename or '_secrets.json' in filename
+                    for filename in gist.files.keys()
+                )
+                
+                if not has_matching_file:
+                    continue
+                
+                # Show progress for matching gists
+                secret_gists_found += 1
+                console.print(f"[blue]Processing GistSafe gist {secret_gists_found}", end='\r')
+                
+                for filename, file in gist.files.items():
                     if '_gistsafe.json' in filename or '_secrets.json' in filename:
                         try:
-                            content = json.loads(gist.files[filename].content)
-                            project = content["project"]
-                            environment = content["environment"]
+                            content = json.loads(file.content)
+                            project = content.get("project")
+                            environment = content.get("environment")
+                            
+                            if not project or not environment:
+                                continue
                             
                             if project not in new_cache:
                                 new_cache[project] = {
@@ -176,18 +250,61 @@ class GistSafe:
                                 "filename": filename,
                                 "gist_id": gist.id
                             }
+                            console.print(f"\n[green]Found project: {project} ({environment})")
+                        except json.JSONDecodeError:
+                            continue
                         except Exception as e:
-                            console.print(f"[red]Error parsing gist {filename}: {str(e)}")
+                            console.print(f"\n[red]Error parsing gist {filename}: {str(e)}")
                             continue
             
-            # Update the cache atomically
+            # Show final stats
+            if total_gists > 0:
+                console.print(f"\n[green]Found {secret_gists_found} GistSafe gists in {total_gists} total gists")
+            else:
+                console.print("[yellow]No gists found")
+            
+            # Update the cache atomically and ensure it's saved
             with self._cache_lock:
                 self.cache = new_cache
-                self.save_cache()
+                if self.save_cache():  # Only proceed if cache was saved successfully
+                    if new_cache:
+                        console.print("[green]Cache refresh complete")
+                    else:
+                        console.print("[yellow]No GistSafe projects found in any gists")
+                else:
+                    console.print("[red]Failed to save cache!")
+                    
+            # Show rate limit status after completion
+            rate_limit = self.gh.get_rate_limit()
+            remaining = rate_limit.core.remaining
+            reset_time = rate_limit.core.reset.strftime('%H:%M:%S')
+            console.print(f"[blue]Remaining GitHub API calls: {remaining} (resets at {reset_time})")
             
-            console.print("[green]Cache refresh complete")
+            return new_cache
+            
         except Exception as e:
             console.print(f"[red]Error refreshing cache: {str(e)}")
+            return {}
+
+    def _display_projects_table(self):
+        """Display the projects table."""
+        if not self.cache:
+            console.print("[yellow]No GistSafe projects found")
+            return
+            
+        # Create and display the projects table
+        table = Table(title="Available GistSafe Projects")
+        table.add_column("Project", style="cyan")
+        table.add_column("Environments", style="green")
+        table.add_column("Gist URL", style="blue")
+        
+        # Sort projects for consistent display
+        for project, data in sorted(self.cache.items()):
+            environments = ", ".join(sorted(data["environments"].keys()))
+            table.add_row(project, environments, data["gist_url"])
+        
+        console.print("\n[bold]Found GistSafe Projects:[/bold]")
+        console.print(table)
 
     def update_cache_for_project(self, project: str, environment: str, gist_id: str, filename: str, gist_url: str):
         """Update cache for a specific project."""
@@ -208,24 +325,9 @@ class GistSafe:
     def list_projects(self):
         """List all available GistSafe projects and their environments."""
         if not self.cache:
-            self.refresh_cache()
+            self.load_cache()  # This will do a sync refresh if needed
         
-        if not self.cache:
-            console.print("[yellow]No GistSafe projects found")
-            return
-        
-        # Create and display the projects table
-        table = Table(title="Available GistSafe Projects")
-        table.add_column("Project", style="cyan")
-        table.add_column("Environments", style="green")
-        table.add_column("Gist URL", style="blue")
-        
-        for project, data in sorted(self.cache.items()):
-            environments = ", ".join(sorted(data["environments"].keys()))
-            table.add_row(project, environments, data["gist_url"])
-        
-        console.print(table)
-        return self.cache
+        self._display_projects_table()
 
     def find_gist(self, project: str, environment: str):
         """Find a gist for a specific project and environment."""
@@ -236,43 +338,40 @@ class GistSafe:
         
         # Debug: Show what we're looking for
         console.print(f"[yellow]Searching for project: {project}")
-        console.print(f"[yellow]Environment (original): {environment}")
         console.print(f"[yellow]Environment (normalized): {normalized_env}")
         
         # Check cache first
-        cached_data = self.get_from_cache(project, environment)
+        cached_data = self.get_from_cache(project, normalized_env)
         if cached_data:
             try:
                 gist = self.gh.get_gist(cached_data["gist_id"])
                 content = json.loads(gist.files[cached_data["filename"]].content)
                 console.print(f"[green]Found matching gist with environment: {content['environment']}")
                 return gist, content
-            except Exception:
-                # If there's an error with cached data, trigger async refresh
-                console.print("[yellow]Cache error, triggering refresh...")
-                self.trigger_refresh_cache()
+            except Exception as e:
+                console.print(f"[yellow]Cache error: {str(e)}, refreshing...")
+                self._refresh_cache_sync()
         
-        # If not found in cache or cache error, do a full search
+        # If not found in cache or cache error, do a targeted search
         console.print("[yellow]Not found in cache, searching GitHub...")
         
         # Try all possible environment name variations
-        possible_envs = {environment.lower(), normalized_env.lower(), 'dev' if normalized_env == 'development' else normalized_env}
-        possible_filenames = [f"{project}_{env}_gistsafe.json" for env in possible_envs]
-        possible_filenames.extend([f"{project}_{env}_secrets.json" for env in possible_envs])
+        possible_envs = {environment.lower(), normalized_env.lower()}
+        possible_filenames = [
+            f"{project}_{env}_gistsafe.json" for env in possible_envs
+        ] + [
+            f"{project}_{env}_secrets.json" for env in possible_envs
+        ]
         
-        gists = self.user.get_gists()
+        # Get only the first page of gists for efficiency
+        gists = self.user.get_gists().get_page(0)
         for gist in gists:
             for filename, file in gist.files.items():
-                # Only process files that match our naming convention
-                if not ('_gistsafe.json' in filename or '_secrets.json' in filename):
-                    continue
-                    
                 if filename in possible_filenames:
                     try:
                         content = json.loads(file.content)
-                        stored_env = content["environment"].lower()
                         if (content["project"] == project and 
-                            stored_env in possible_envs):
+                            content["environment"].lower() in possible_envs):
                             # Update cache with found gist
                             self.update_cache_for_project(
                                 project,
@@ -283,8 +382,7 @@ class GistSafe:
                             )
                             console.print(f"[green]Found matching gist with environment: {content['environment']}")
                             return gist, content
-                    except Exception as e:
-                        console.print(f"[red]Error parsing gist content: {str(e)}")
+                    except Exception:
                         continue
         
         console.print("[red]No matching gist found. Available projects:")
