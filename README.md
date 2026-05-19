@@ -27,7 +27,7 @@ pipx install gistsafe
 From source:
 
 ```bash
-git clone https://github.com/leoduff/gistsafe.git
+git clone https://github.com/moringaman/gistsafe.git
 cd gistsafe
 pip install .
 ```
@@ -166,7 +166,7 @@ For production use, consider HashiCorp Vault, AWS Secrets Manager, Doppler, or I
 ## Development
 
 ```bash
-git clone https://github.com/leoduff/gistsafe.git
+git clone https://github.com/moringaman/gistsafe.git
 cd gistsafe
 python -m venv .venv
 source .venv/bin/activate

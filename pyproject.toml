@@ -37,9 +37,9 @@ dependencies = [
 gistsafe = "gistsafe.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/leoduff/gistsafe"
-Repository = "https://github.com/leoduff/gistsafe"
-Issues = "https://github.com/leoduff/gistsafe/issues"
+Homepage = "https://github.com/moringaman/gistsafe"
+Repository = "https://github.com/moringaman/gistsafe"
+Issues = "https://github.com/moringaman/gistsafe/issues"
 
 [tool.setuptools.packages.find]
 include = ["gistsafe*"]
