@@ -7,14 +7,14 @@ name = "gistsafe"
 version = "0.1.0"
 description = "Secure secret management using encrypted GitHub Gists"
 readme = "README.md"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Leon Duffus" }]
 keywords = ["secrets", "encryption", "github", "gist", "cli", "devops"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
