@@ -1,5 +1,8 @@
 #!/bin/bash
-SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-VENV_DIR="$(dirname $SCRIPT_DIR)/.venv"
+# GistSafe wrapper script for development use.
+# For normal installation, use: pip install .
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+VENV_DIR="$PROJECT_DIR/.venv"
 source "$VENV_DIR/bin/activate"
-python "$(dirname $SCRIPT_DIR)/gistsafe.py" "$@"
+exec python -m gistsafe.cli "$@"

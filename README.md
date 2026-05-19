@@ -1,291 +1,185 @@
 # GistSafe
 
-GistSafe is a secure secret management tool that uses GitHub Gists as a backend for storing encrypted secrets. It provides a simple CLI interface for managing secrets across different projects and environments.
+Encrypted secret management for developers. Store environment variables securely in private GitHub Gists.
 
 ## Features
 
-- 🔐 Strong encryption using PBKDF2HMAC with SHA256
-- 🌐 Uses private GitHub Gists as storage
-- 🔄 Environment-based secret management
-- 💉 Secret injection into runtime environment
-- 🏷️ Optional password hints for secret recovery
-- 📝 Support for multiple projects and environments
-- 🎭 Optional key obfuscation for enhanced security
+- Strong encryption via PBKDF2HMAC-SHA256 + Fernet
+- Private GitHub Gists as storage — no infrastructure to manage
+- Per-project, per-environment secret organization
+- Inject secrets as environment variables into any command
+- Optional key obfuscation (encrypts variable names too)
+- Password hints for recovery
+- Local caching for fast lookups
 
 ## Installation
 
-### Quick Install (Recommended)
-
-1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/gistsafe.git
+pip install gistsafe
+```
+
+Or with pipx (recommended for CLI tools):
+
+```bash
+pipx install gistsafe
+```
+
+From source:
+
+```bash
+git clone https://github.com/leoduff/gistsafe.git
 cd gistsafe
+pip install .
 ```
 
-2. Run the installation script:
+### Setup
+
+Create a `.env` file in your project directory, or set the environment variable:
+
 ```bash
-./install.sh
+export GITHUB_TOKEN=ghp_yourtokenhere
 ```
 
-3. Follow the on-screen instructions to:
-   - Add your GitHub token to the `.env` file
-   - Source your shell configuration file
-   - Test the installation with `gistsafe --help`
+You need a [GitHub personal access token](https://github.com/settings/tokens) with the `gist` scope.
 
-The installation script will:
-- Create a Python virtual environment
-- Install all dependencies
-- Add GistSafe to your PATH
-- Create a `.env` file template
-- Support both bash and zsh shells
+**Requirements**: Python 3.10+
 
-### Manual Installation
+## Quick Start
 
-If you prefer to install manually:
-
-1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/gistsafe.git
-cd gistsafe
-```
+# Create secrets for a project
+gistsafe create --project myapp --environment dev
+# → prompts for key/value pairs and an encryption password
 
-2. Create and activate a virtual environment:
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
+# View secrets
+gistsafe get --project myapp --environment dev
 
-3. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+# Run a command with secrets injected as env vars
+gistsafe inject --project myapp --environment dev -- npm start
 
-4. Create a `.env` file with your GitHub token:
-```bash
-echo "GITHUB_TOKEN=your_github_token_here" > .env
-```
-
-5. Add the GistSafe directory to your PATH or create a symlink:
-```bash
-# Option 1: Add to PATH in your shell config (.bashrc, .zshrc, etc.)
-export PATH="/path/to/gistsafe/bin:$PATH"
-
-# Option 2: Create a symlink
-ln -s /path/to/gistsafe/gistsafe.py /usr/local/bin/gistsafe
+# List all projects
+gistsafe list
 ```
 
 ## Usage
 
 ### Creating Secrets
 
-Create new secrets for a project and environment:
-
 ```bash
-gistsafe create --project your-project --environment dev
+gistsafe create --project myapp --environment dev
 ```
 
-Optional: Add a password hint to help remember your encryption password:
-```bash
-gistsafe create --project your-project --environment dev --password-hint "Office wifi password"
-```
+Options:
+- `--password-hint "Office wifi password"` — hint shown before password prompt
+- `--obfuscate-keys` — encrypts key names as well as values
 
-For enhanced security, you can obfuscate the secret keys as well as the values:
-```bash
-gistsafe create --project your-project --environment dev --obfuscate-keys
-```
-
-This means that even the names of your environment variables will be encrypted in storage. For example:
-- `DATABASE_URL` becomes something like `gAAAAABk7X...` in storage
-- `API_KEY` becomes something like `gAAAAABk7Y...` in storage
-
-The original names are automatically restored when you retrieve or inject the secrets.
+With obfuscation enabled, `DATABASE_URL` in storage becomes `gAAAAABk7X...`. Original names are restored on retrieval.
 
 ### Updating Secrets
 
-Update existing secrets:
-
 ```bash
-gistsafe update --project your-project --environment dev
+gistsafe update --project myapp --environment dev
 ```
 
-You can also update or add a password hint during update:
-```bash
-gistsafe update --project your-project --environment dev --password-hint "New hint"
-```
+Shows current secrets first, then prompts for new values. Unchanged secrets are preserved.
 
 ### Retrieving Secrets
 
-View secrets for a project and environment:
-
 ```bash
-gistsafe get --project your-project --environment dev
+gistsafe get --project myapp --environment dev
 ```
 
-If a password hint was set, it will be displayed before the password prompt.
+If a password hint was set, it displays before the password prompt.
 
-### Injecting Secrets into Runtime Environment
-
-Run commands with secrets injected as environment variables:
+### Injecting Secrets into Commands
 
 ```bash
-# Using explicit environment
-gistsafe inject --project your-project npm run start
-
-# Using NODE_ENV to determine environment
-export NODE_ENV=production
-gistsafe inject --project your-project npm run start
+gistsafe inject --project myapp --environment prod -- npm start
+gistsafe inject --project myapp -- npm test
+gistsafe inject --project myapp -- printenv API_KEY
 ```
 
-The inject command will:
-1. Load secrets from the specified project and environment
-2. Convert secret keys to uppercase
-3. Inject them as environment variables
-4. Display which variables were injected (with masked values)
-5. Run your specified command
+The `inject` command decrypts secrets, uppercases the keys, sets them as environment variables, and runs your command. If `--environment` is omitted, it uses `NODE_ENV` (defaulting to `development`).
 
-Example:
-```bash
-# If you have a secret named "api_key"
-# It will be available in your application as:
-process.env.API_KEY
-```
+### Listing Projects
 
-## Security Best Practices
-
-1. **Password Management**:
-   - Use strong, unique passwords for each project
-   - Store passwords securely (e.g., in a password manager)
-   - Use meaningful but secure password hints
-   - Never include the actual password in the hint
-
-2. **Environment Variables**:
-   - Keep your GitHub token secure
-   - Don't commit the `.env` file
-   - Regularly rotate your GitHub token
-   - Use key obfuscation for sensitive projects
-
-3. **Secret Access**:
-   - Use different passwords for different environments
-   - Limit access to production secrets
-   - Regularly audit your gists
-   - Enable key obfuscation for production environments
-
-## Command Reference
-
-### List Command
 ```bash
 gistsafe list
 ```
-Lists all available GistSafe projects and their environments in a table format, showing:
-- Project names
-- Available environments for each project
-- Gist URLs for easy access
 
-### Create Command
-```bash
-gistsafe create --project PROJECT --environment ENV [--password-hint HINT] [--obfuscate-keys]
+Shows all projects, their environments, and gist URLs in a table.
+
+## Architecture
+
 ```
-- `PROJECT`: Your project name
-- `ENV`: Environment (e.g., dev, prod)
-- `--password-hint`: Optional hint to help remember the password
-- `--obfuscate-keys`: Encrypt secret keys as well as values
-
-### Update Command
-```bash
-gistsafe update --project PROJECT --environment ENV [--password-hint HINT]
+┌──────────┐     ┌──────────────┐     ┌─────────────┐
+│  CLI     │────▶│  GistSafe    │────▶│  GitHub API │
+│ (Click)  │     │  (manager)   │     │  (PyGithub) │
+└──────────┘     └──────┬───────┘     └─────────────┘
+                        │
+              ┌─────────┼─────────┐
+              ▼         ▼         ▼
+        ┌─────────┐ ┌───────┐ ┌─────────┐
+        │ crypto  │ │ cache │ │ display │
+        │(Fernet) │ │ (JSON)│ │ (Rich)  │
+        └─────────┘ └───────┘ └─────────┘
 ```
 
-## Caching System
+Secrets are encrypted client-side with your password before touching the network. GitHub never sees plaintext.
 
-GistSafe includes an intelligent caching system to improve performance and reduce API calls to GitHub. The cache system:
+## Caching
 
-- Stores project and environment information locally at `~/.gistsafe/cache.json`
-- Updates asynchronously in the background without blocking operations
-- Auto-refreshes when:
-  - Cache is older than 1 hour
-  - Cache lookup fails
-  - New secrets are created or updated
-- Provides thread-safe operations for concurrent access
-- Falls back to direct GitHub API calls if cache is unavailable
+GistSafe maintains a local index at `~/.gistsafe/cache.json` to avoid hammering the GitHub API. The cache:
 
-The cache maintains:
-- Project names and environments
-- Gist IDs and URLs
-- File names and metadata
+- Stores project names, environments, and gist IDs (never secrets)
+- Auto-refreshes in the background when stale (>1 hour)
+- Updates immediately on create/update operations
+- Falls back to direct API search on cache miss
 
-No sensitive information or secrets are ever stored in the cache.
+## Security
 
-### Cache Benefits
+### What's Protected
 
-- Faster project listing and secret lookups
-- Reduced GitHub API usage
-- Better performance for frequently accessed projects
-- Non-blocking operations for improved user experience
+- All secrets are encrypted with PBKDF2HMAC-SHA256 (100,000 iterations) + Fernet before storage
+- Encryption password never leaves your machine
+- Gists are created as private by default
+- Optional key obfuscation hides variable names in storage
 
-## Security Disclaimer
+### Limitations
 
-⚠️ **Important Security Notice**
+GistSafe is designed for development and personal projects. It is **not** suitable for:
 
-GistSafe is designed for development environments and personal projects. While we implement strong encryption practices and security measures, please note the following:
-
-### Limitations and Risks
-- GitHub Gists are used as the storage backend, making your secrets' availability dependent on GitHub's service
-- Access to encrypted secrets relies on GitHub authentication and personal access tokens
-- No built-in audit logging or compliance monitoring
-- Limited access control (based on GitHub's permissions)
-- No automatic secret rotation or expiration
-- No enterprise-grade backup or disaster recovery features
-
-### Not Recommended For
 - Production environments
-- Enterprise applications
-- Regulated industries (finance, healthcare, etc.)
-- Critical infrastructure
-- Applications requiring compliance (SOC2, HIPAA, PCI, etc.)
+- Regulated industries (finance, healthcare)
+- Applications requiring SOC2, HIPAA, or PCI compliance
 
-### Recommended Alternatives for Production/Enterprise Use
-For production or enterprise environments, please consider using dedicated secret management solutions such as:
-- HashiCorp Vault
-- AWS Secrets Manager
-- Google Cloud Secret Manager
-- Azure Key Vault
-- 1Password for Teams
-- Doppler
-- Keeper Secrets Manager
+For production use, consider HashiCorp Vault, AWS Secrets Manager, Doppler, or Infisical.
 
-### Best Practices When Using GistSafe
-1. Use strong, unique passwords for each project
-2. Regularly rotate your GitHub tokens
-3. Never store production credentials
-4. Enable key obfuscation for sensitive data
-5. Use meaningful but secure password hints
-6. Regularly audit your gists and remove unused secrets
-7. Monitor GitHub account security (enable 2FA, review access)
+### Best Practices
 
-By using GistSafe, you acknowledge these limitations and accept responsibility for evaluating whether it meets your security requirements.
+- Use strong, unique passwords per project
+- Rotate GitHub tokens regularly
+- Enable 2FA on your GitHub account
+- Use key obfuscation for sensitive projects
+- Never include the actual password in hints
 
-## TODO
+## Development
 
-### Security Enhancements
-- [ ] Implement automatic secret rotation capabilities
-- [ ] Add comprehensive audit logging for all secret operations
-- [ ] Add Multi-Factor Authentication (MFA) support for secret access
-- [ ] Implement version control for secrets with history tracking
-- [ ] Add secret expiration and automatic renewal
-- [ ] Implement fine-grained access control policies
-- [ ] Add support for secret value validation (e.g., format checking)
-- [ ] Implement rate limiting for failed decryption attempts
-- [ ] Add alerts for suspicious access patterns
-- [ ] Support for backup and disaster recovery
+```bash
+git clone https://github.com/leoduff/gistsafe.git
+cd gistsafe
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
 
-### Operational Improvements
-- [ ] Add support for bulk secret operations
-- [ ] Implement secret sharing between teams
-- [ ] Add integration with CI/CD pipelines
-- [ ] Support for secret templating
-- [ ] Add automated backup functionality
-- [ ] Implement health checks and monitoring
-- [ ] Add support for secret categories and tagging
-- [ ] Implement secret usage analytics
-- [ ] Add support for secret dependencies and relationships
-- [ ] Create migration tools for other secret management systems
+Run tests:
+
+```bash
+# Test crypto roundtrip
+python -c "from gistsafe.crypto import encrypt_value, decrypt_value; import os; s=os.urandom(16); v,s2=encrypt_value('test','pw',s); assert decrypt_value(v,'pw',s2)=='test'; print('OK')"
+```
+
+## License
+
+MIT

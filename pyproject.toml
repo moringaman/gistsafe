@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gistsafe"
+version = "0.1.0"
+description = "Secure secret management using encrypted GitHub Gists"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "Leon Duffus" }]
+keywords = ["secrets", "encryption", "github", "gist", "cli", "devops"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Security :: Cryptography",
+    "Topic :: Software Development :: Version Control :: Git",
+    "Topic :: Utilities",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "PyGithub>=2.1,<3",
+    "cryptography>=42,<44",
+    "python-dotenv>=1.0,<2",
+    "click>=8.0,<9",
+    "rich>=13.0,<14",
+]
+
+[project.scripts]
+gistsafe = "gistsafe.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/leoduff/gistsafe"
+Repository = "https://github.com/leoduff/gistsafe"
+Issues = "https://github.com/leoduff/gistsafe/issues"
+
+[tool.setuptools.packages.find]
+include = ["gistsafe*"]
