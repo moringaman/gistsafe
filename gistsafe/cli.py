@@ -98,7 +98,7 @@ def create(
         secrets: dict[str, str] = {}
 
         while True:
-            key = click.prompt("Enter secret key (or empty to finish)", default="")
+            key = click.prompt("Enter variable name (or empty to finish)", default="")
             if not key:
                 break
             value = click.prompt("Enter secret value", hide_input=True)
@@ -168,7 +168,7 @@ def update(
         console.print("\n[yellow]Enter new secrets or update existing ones:")
         secrets: dict[str, str] = {}
         while True:
-            key = click.prompt("Enter secret key (or empty to finish)", default="")
+            key = click.prompt("Enter variable name (or empty to finish)", default="")
             if not key:
                 break
             value = click.prompt("Enter secret value", hide_input=True)
