@@ -199,7 +199,12 @@ def update(
     "--password",
     help="Encryption password (prompts if omitted, uses keychain if saved)",
 )
-def get(project: str, environment: str, password: str | None) -> None:
+@click.option(
+    "--save-password",
+    is_flag=True,
+    help="Save the password to your system keychain for future use",
+)
+def get(project: str, environment: str, password: str | None, save_password: bool) -> None:
     """Retrieve and decrypt secrets from a gist."""
     if not GITHUB_TOKEN:
         console.print("[red]Error: GITHUB_TOKEN environment variable not set")
@@ -216,6 +221,8 @@ def get(project: str, environment: str, password: str | None) -> None:
             console.print(
                 "[yellow]No secrets found for the specified project and environment"
             )
+        elif save_password:
+            kc.save_password(project, environment, pw)
     except Exception as e:
         console.print(f"[red]Error: {e}")
 
@@ -236,12 +243,18 @@ def get(project: str, environment: str, password: str | None) -> None:
     "--password",
     help="Encryption password (prompts if omitted, uses keychain if saved)",
 )
+@click.option(
+    "--save-password",
+    is_flag=True,
+    help="Save the password to your system keychain for future use",
+)
 @click.pass_context
 def inject(
     ctx: click.Context,
     project: str,
     environment: str | None,
     password: str | None,
+    save_password: bool,
 ) -> None:
     """Inject secrets as environment variables and run a command.
 
@@ -263,6 +276,9 @@ def inject(
     pw = _resolve_password(project, normalized_env, password)
     if not pw:
         return
+
+    if save_password:
+        kc.save_password(project, normalized_env, pw)
 
     command_list = ctx.args
     if not command_list:
