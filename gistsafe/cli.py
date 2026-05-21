@@ -14,13 +14,33 @@ from .utils import normalize_environment
 
 
 def _init_token() -> str | None:
+    """Load GitHub token: keychain → $GITHUB_TOKEN → .env → interactive prompt."""
+    token = kc.get_token()
+    if token:
+        return token
+
+    token = os.getenv("GITHUB_TOKEN")
+    if token:
+        console.print("[green]Using GitHub token from environment")
+        return token
+
     load_dotenv()
     token = os.getenv("GITHUB_TOKEN")
     if token:
-        console.print("[green]Successfully loaded GitHub token from .env file")
-    else:
-        console.print("[red]No GitHub token found in .env file")
-    return token
+        console.print("[green]Using GitHub token from .env file")
+        return token
+
+    console.print(
+        "\n[yellow]No GitHub token found. Create one at:[/yellow]"
+        "\n[blue]https://github.com/settings/tokens[/blue]"
+        "\n[yellow]Required scope: gist[/yellow]\n"
+    )
+    token = click.prompt("Paste your GitHub token", hide_input=True)
+    if token:
+        kc.save_token(token)
+        console.print("[green]Token saved. You're all set!")
+        return token
+    return None
 
 
 GITHUB_TOKEN = _init_token()
@@ -338,6 +358,49 @@ def keychain() -> None:
 def keychain_forget(project: str, environment: str) -> None:
     """Remove a saved password from the system keychain."""
     kc.delete_password(project, environment)
+
+
+@cli.group()
+def auth() -> None:
+    """Manage the GitHub token stored in the system keychain."""
+
+
+@auth.command("login")
+def auth_login() -> None:
+    """Save a new GitHub token to the system keychain."""
+    console.print("\n[blue]Create a token at: https://github.com/settings/tokens[/blue]")
+    console.print("[yellow]Required scope: gist[/yellow]\n")
+    token = click.prompt("Paste your GitHub token", hide_input=True)
+    if token:
+        kc.save_token(token)
+        console.print("[green]Token saved. You're all set!")
+
+
+@auth.command("logout")
+def auth_logout() -> None:
+    """Remove the GitHub token from the system keychain."""
+    kc.delete_token()
+
+
+@auth.command("status")
+def auth_status() -> None:
+    """Check if a GitHub token is configured and valid."""
+    token = kc.get_token() or os.getenv("GITHUB_TOKEN")
+    if not token:
+        console.print("[red]No GitHub token configured.")
+        console.print("[yellow]Run: gistsafe auth login")
+        return
+
+    source = "keychain" if kc.get_token() else "environment"
+    console.print(f"[blue]Token source: {source}[/blue]")
+    console.print(f"[blue]Token: {token[:4]}...{token[-4:]}[/blue]")
+
+    try:
+        from github import Github
+        user = Github(token).get_user()
+        console.print(f"[green]Authenticated as: {user.login}[/green]")
+    except Exception as e:
+        console.print(f"[red]Token invalid: {e}[/red]")
 
 
 @cli.command()

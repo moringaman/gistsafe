@@ -5,6 +5,7 @@ import keyring
 from .display import console
 
 SERVICE_NAME = "gistsafe"
+_TOKEN_ENTRY = "__github_token__"
 
 
 def _entry_name(project: str, environment: str) -> str:
@@ -35,3 +36,26 @@ def delete_password(project: str, environment: str) -> None:
         console.print(f"[green]Removed password from keychain for {entry}")
     except keyring.errors.PasswordDeleteError:
         pass
+
+
+def save_token(token: str) -> None:
+    """Store the GitHub token in the system keychain."""
+    keyring.set_password(SERVICE_NAME, _TOKEN_ENTRY, token)
+    console.print("[green]GitHub token saved to keychain")
+
+
+def get_token() -> str | None:
+    """Retrieve the GitHub token from the system keychain, or None."""
+    token = keyring.get_password(SERVICE_NAME, _TOKEN_ENTRY)
+    if token:
+        console.print("[blue]Using GitHub token from keychain")
+    return token
+
+
+def delete_token() -> None:
+    """Remove the GitHub token from the system keychain."""
+    try:
+        keyring.delete_password(SERVICE_NAME, _TOKEN_ENTRY)
+        console.print("[green]Removed GitHub token from keychain")
+    except keyring.errors.PasswordDeleteError:
+        console.print("[yellow]No GitHub token found in keychain")
