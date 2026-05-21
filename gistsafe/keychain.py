@@ -1,4 +1,8 @@
-"""System keychain integration — in-memory caching avoids multiple unlock prompts."""
+"""System keychain integration — uses native macOS security CLI to avoid
+multiple unlock prompts, falls back to keyring on other platforms."""
+
+import subprocess
+import sys
 
 import keyring
 
@@ -10,18 +14,46 @@ _TOKEN_ENTRY = "__github_token__"
 _cache: dict[str, str | None] = {}
 _primed = False
 
+IS_MACOS = sys.platform == "darwin"
+
+
+def _security_read(account: str) -> str | None:
+    result = subprocess.run(
+        ["security", "find-generic-password", "-s", SERVICE_NAME,
+         "-a", account, "-w"],
+        capture_output=True, text=True,
+    )
+    return result.stdout.strip() if result.returncode == 0 else None
+
+
+def _security_write(account: str, value: str) -> None:
+    subprocess.run(
+        ["security", "add-generic-password", "-s", SERVICE_NAME,
+         "-a", account, "-w", value, "-U"],
+        capture_output=True,
+    )
+
+
+def _security_delete(account: str) -> None:
+    subprocess.run(
+        ["security", "delete-generic-password", "-s", SERVICE_NAME,
+         "-a", account],
+        capture_output=True,
+    )
+
 
 def _prime_cache() -> None:
-    """Pre-load token from keychain to trigger a single macOS unlock prompt."""
     global _primed
     if _primed:
         return
     _primed = True
-    try:
-        token = keyring.get_password(SERVICE_NAME, _TOKEN_ENTRY)
-        _cache[_TOKEN_ENTRY] = token
-    except Exception:
-        _cache[_TOKEN_ENTRY] = None
+    if IS_MACOS:
+        _cache[_TOKEN_ENTRY] = _security_read(_TOKEN_ENTRY)
+    else:
+        try:
+            _cache[_TOKEN_ENTRY] = keyring.get_password(SERVICE_NAME, _TOKEN_ENTRY)
+        except Exception:
+            _cache[_TOKEN_ENTRY] = None
 
 
 def _entry_name(project: str, environment: str) -> str:
@@ -31,16 +63,23 @@ def _entry_name(project: str, environment: str) -> str:
 def _read(entry: str) -> str | None:
     _prime_cache()
     if entry not in _cache:
-        try:
-            _cache[entry] = keyring.get_password(SERVICE_NAME, entry)
-        except Exception:
-            _cache[entry] = None
+        if IS_MACOS:
+            _cache[entry] = _security_read(entry)
+        else:
+            try:
+                _cache[entry] = keyring.get_password(SERVICE_NAME, entry)
+            except Exception:
+                _cache[entry] = None
     return _cache[entry]
 
 
 def save_password(project: str, environment: str, password: str) -> None:
     entry = _entry_name(project, environment)
-    keyring.set_password(SERVICE_NAME, entry, password)
+    if IS_MACOS:
+        _security_delete(entry)
+        _security_write(entry, password)
+    else:
+        keyring.set_password(SERVICE_NAME, entry, password)
     _cache[entry] = password
     console.print(f"[green]Password saved to keychain for {entry}")
 
@@ -55,16 +94,23 @@ def get_password(project: str, environment: str) -> str | None:
 
 def delete_password(project: str, environment: str) -> None:
     entry = _entry_name(project, environment)
-    try:
-        keyring.delete_password(SERVICE_NAME, entry)
-        console.print(f"[green]Removed password from keychain for {entry}")
-    except keyring.errors.PasswordDeleteError:
-        pass
+    if IS_MACOS:
+        _security_delete(entry)
+    else:
+        try:
+            keyring.delete_password(SERVICE_NAME, entry)
+        except keyring.errors.PasswordDeleteError:
+            pass
     _cache.pop(entry, None)
+    console.print(f"[green]Removed password from keychain for {entry}")
 
 
 def save_token(token: str) -> None:
-    keyring.set_password(SERVICE_NAME, _TOKEN_ENTRY, token)
+    if IS_MACOS:
+        _security_delete(_TOKEN_ENTRY)
+        _security_write(_TOKEN_ENTRY, token)
+    else:
+        keyring.set_password(SERVICE_NAME, _TOKEN_ENTRY, token)
     _cache[_TOKEN_ENTRY] = token
     console.print("[green]GitHub token saved to keychain")
 
@@ -77,9 +123,12 @@ def get_token() -> str | None:
 
 
 def delete_token() -> None:
-    try:
-        keyring.delete_password(SERVICE_NAME, _TOKEN_ENTRY)
-        console.print("[green]Removed GitHub token from keychain")
-    except keyring.errors.PasswordDeleteError:
-        console.print("[yellow]No GitHub token found in keychain")
+    if IS_MACOS:
+        _security_delete(_TOKEN_ENTRY)
+    else:
+        try:
+            keyring.delete_password(SERVICE_NAME, _TOKEN_ENTRY)
+        except keyring.errors.PasswordDeleteError:
+            pass
     _cache.pop(_TOKEN_ENTRY, None)
+    console.print("[green]Removed GitHub token from keychain")
