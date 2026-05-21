@@ -7,7 +7,7 @@ import base64
 import json
 import os
 import subprocess
-import threading
+import sys
 
 from github import Github, InputFileContent
 
@@ -35,6 +35,27 @@ def _check_password_strength(password: str) -> None:
         )
 
 
+def _spawn_cache_refresh(token: str) -> None:
+    """Spawn a subprocess to refresh the cache silently.
+
+    Uses a subprocess instead of a thread to avoid daemon-thread
+    crashes on stdout during Python interpreter shutdown.
+    """
+    env = os.environ.copy()
+    env["_GISTSAFE_REFRESH_TOKEN"] = token
+    subprocess.Popen(
+        [
+            sys.executable,
+            "-c",
+            "import os; from gistsafe.manager import GistSafe; "
+            "GistSafe(os.environ['_GISTSAFE_REFRESH_TOKEN']).refresh_cache()",
+        ],
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
 class GistSafe:
     """Manages encrypted secrets stored in private GitHub Gists."""
 
@@ -42,6 +63,7 @@ class GistSafe:
         if not github_token:
             raise ValueError("GitHub token is required")
 
+        self._token = github_token
         self.gh = Github(github_token)
         user = self.gh.get_user()
         console.print(f"[green]Authenticated as GitHub user: {user.login}")
@@ -123,22 +145,26 @@ class GistSafe:
             console.print(f"[red]Error refreshing cache: {e}")
 
     def list_projects(self) -> None:
-        """Display all GistSafe projects from cache, refreshing in background if stale."""
+        """Display all GistSafe projects from cache, refreshing as needed."""
         projects = self.cache.get_all()
 
-        if projects:
-            display_projects_table(projects)
-        else:
-            console.print("[yellow]No GistSafe projects found in the local cache.")
-            console.print(
-                "[yellow]If this is your first time running GistSafe, the cache "
-                "will be refreshed in the background."
-            )
+        # Empty cache: first run — do sync refresh so user sees results immediately
+        if not projects:
+            console.print("[yellow]First run — fetching projects from GitHub...")
+            self.refresh_cache()
+            projects = self.cache.get_all()
+            if projects:
+                display_projects_table(projects)
+            else:
+                console.print("[yellow]No GistSafe projects found.")
+            return
 
+        display_projects_table(projects)
+
+        # Stale cache: spawn background subprocess to refresh (avoids daemon thread crash)
         if self.cache.needs_refresh():
-            console.print("[yellow]Cache is stale or missing. Refreshing in background...")
-            thread = threading.Thread(target=self.refresh_cache, daemon=True)
-            thread.start()
+            console.print("[yellow]Cache is stale. Refreshing in background...")
+            _spawn_cache_refresh(self._token)
 
     def find_gist(self, project: str, environment: str):
         """Find a GistSafe gist for a project and environment.
