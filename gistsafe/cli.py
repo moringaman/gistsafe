@@ -6,6 +6,7 @@ import sys
 import click
 from dotenv import load_dotenv
 
+from . import __version__ as _version
 from . import keychain as kc
 from .display import console
 from .manager import GistSafe
@@ -44,6 +45,7 @@ def _prompt_new_password() -> str:
     )
 
 
+@click.version_option(version=_version, message="%(prog)s %(version)s")
 @click.group()
 def cli() -> None:
     """GistSafe - Secure secret management using GitHub Gists.
