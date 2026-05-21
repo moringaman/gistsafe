@@ -412,6 +412,30 @@ class GistSafe:
         console.print("[red]No secrets were successfully decrypted")
         return None
 
+    def delete_gist(self, project: str, environment: str) -> bool:
+        """Delete a GistSafe gist for a project/environment.
+
+        Removes the gist from GitHub and clears the cache entry.
+        Returns True if deleted, False if not found.
+        """
+        gist, content = self.find_gist(project, environment)
+        if not gist:
+            console.print("[red]No matching gist found to delete")
+            return False
+
+        gist.delete()
+        console.print(f"[green]Deleted gist for {project}/{environment}")
+
+        actual_env = content.get("environment", environment)
+        with self.cache._lock:
+            if project in self.cache._projects:
+                envs = self.cache._projects[project].get("environments", {})
+                envs.pop(actual_env, None)
+                if not envs:
+                    self.cache._projects.pop(project, None)
+        self.cache.save()
+        return True
+
     def inject_and_run(
         self,
         project: str,
