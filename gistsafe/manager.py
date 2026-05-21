@@ -56,6 +56,17 @@ def _spawn_cache_refresh(token: str) -> None:
     )
 
 
+def _get_rate_info(gh_client):
+    """Get core rate limit info, compatible with PyGithub 2.1 - 2.5+.
+
+    PyGithub 2.2+ changed get_rate_limit() return type from RateLimit
+    (with .core attribute) to RateLimitOverview (with .rate attribute).
+    """
+    rl = gh_client.get_rate_limit()
+    core = rl.core if hasattr(rl, "core") else rl.rate
+    return core.remaining, core.reset
+
+
 class GistSafe:
     """Manages encrypted secrets stored in private GitHub Gists."""
 
@@ -77,11 +88,10 @@ class GistSafe:
         new_cache: dict[str, dict] = {}
 
         try:
-            rate_limit = self.gh.get_rate_limit()
-            remaining = rate_limit.core.remaining
-            reset_time = rate_limit.core.reset.strftime("%H:%M:%S")
+            remaining, reset_dt = _get_rate_info(self.gh)
             console.print(
-                f"[blue]GitHub API calls remaining: {remaining} (resets at {reset_time})"
+                f"[blue]GitHub API calls remaining: {remaining} "
+                f"(resets at {reset_dt.strftime('%H:%M:%S')})"
             )
 
             gists = self.user.get_gists()
@@ -136,10 +146,10 @@ class GistSafe:
 
             self.cache.replace_all(new_cache)
 
-            rate_limit = self.gh.get_rate_limit()
+            remaining, reset_dt = _get_rate_info(self.gh)
             console.print(
-                f"[blue]Remaining API calls: {rate_limit.core.remaining} "
-                f"(resets at {rate_limit.core.reset.strftime('%H:%M:%S')})"
+                f"[blue]Remaining API calls: {remaining} "
+                f"(resets at {reset_dt.strftime('%H:%M:%S')})"
             )
         except Exception as e:
             console.print(f"[red]Error refreshing cache: {e}")

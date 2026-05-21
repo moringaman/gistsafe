@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gistsafe"
-version = "0.1.1"
+version = "0.1.2"
 description = "Secure secret management using encrypted GitHub Gists"
 readme = "README.md"
 license = "MIT"
