@@ -74,11 +74,25 @@ def cli() -> None:
     Secrets are encrypted client-side and never transmitted in plaintext.
 
     \b
+    Quick start:
+      gistsafe create --project myapp --environment dev --save-password
+      gistsafe get --project myapp --environment dev
+      gistsafe inject --project myapp -- npm start
+      gistsafe list
+
+    \b
     Environment short forms:
       dev   -> development
       prod  -> production
       stage -> staging
       qa    -> testing
+
+    \b
+    Auth & keychain:
+      gistsafe auth login       set/update GitHub token in system keychain
+      gistsafe auth status      verify token is valid
+      gistsafe auth logout      remove token from keychain
+      gistsafe keychain forget  remove a saved project password
     """
 
 
@@ -108,7 +122,13 @@ def create(
     save_password: bool,
     obfuscate_keys: bool,
 ) -> None:
-    """Create a new encrypted secret gist for a project."""
+    """Create a new encrypted secret gist for a project.
+
+    \b
+    Examples:
+      gistsafe create --project myapp --environment dev
+      gistsafe create --project myapp -e prod --save-password --obfuscate-keys
+    """
     if not GITHUB_TOKEN:
         console.print("[red]Error: GITHUB_TOKEN environment variable not set")
         return
@@ -167,7 +187,15 @@ def update(
     password_hint: str | None,
     save_password: bool,
 ) -> None:
-    """Update existing secrets in a gist."""
+    """Update existing secrets in a gist.
+
+    Shows current secrets, then prompts for new or updated values.
+    Unchanged secrets are preserved.
+
+    \b
+    Example:
+      gistsafe update --project myapp --environment dev --save-password
+    """
     if not GITHUB_TOKEN:
         console.print("[red]Error: GITHUB_TOKEN environment variable not set")
         return
@@ -227,7 +255,17 @@ def update(
     help="Save the password to your system keychain for future use",
 )
 def get(project: str, environment: str, password: str | None, save_password: bool) -> None:
-    """Retrieve and decrypt secrets from a gist."""
+    """Retrieve and decrypt secrets from a gist.
+
+    If --password is omitted, resolves from the system keychain
+    or prompts interactively. Use --save-password to store a
+    manually-entered password for future use.
+
+    \b
+    Examples:
+      gistsafe get --project myapp --environment dev
+      gistsafe get --project myapp -e dev --save-password
+    """
     if not GITHUB_TOKEN:
         console.print("[red]Error: GITHUB_TOKEN environment variable not set")
         return
@@ -325,7 +363,16 @@ def inject(
     "--force", is_flag=True, help="Skip confirmation prompt"
 )
 def delete(project: str, environment: str, force: bool) -> None:
-    """Delete a GistSafe project/environment gist permanently."""
+    """Delete a GistSafe project/environment gist permanently.
+
+    Removes the GitHub gist, cache entry, and any saved keychain
+    password. Use --force to skip the confirmation prompt.
+
+    \b
+    Examples:
+      gistsafe delete --project myapp --environment dev
+      gistsafe delete --project myapp -e dev --force
+    """
     if not GITHUB_TOKEN:
         console.print("[red]Error: GITHUB_TOKEN environment variable not set")
         return
@@ -349,7 +396,16 @@ def delete(project: str, environment: str, force: bool) -> None:
 
 @cli.group()
 def keychain() -> None:
-    """Manage passwords stored in the system keychain."""
+    """Manage passwords stored in the system keychain.
+
+    \b
+    Commands:
+      forget  Remove a saved password for a project/environment
+
+    \b
+    Example:
+      gistsafe keychain forget --project myapp --environment dev
+    """
 
 
 @keychain.command("forget")
@@ -362,7 +418,19 @@ def keychain_forget(project: str, environment: str) -> None:
 
 @cli.group()
 def auth() -> None:
-    """Manage the GitHub token stored in the system keychain."""
+    """Manage the GitHub token stored in the system keychain.
+
+    \b
+    Commands:
+      login   Save a new token to the keychain
+      logout  Remove the token from the keychain
+      status  Verify the token is valid and show which user it belongs to
+
+    \b
+    Examples:
+      gistsafe auth login
+      gistsafe auth status
+    """
 
 
 @auth.command("login")
@@ -405,7 +473,11 @@ def auth_status() -> None:
 
 @cli.command()
 def list() -> None:
-    """List all available GistSafe projects and environments."""
+    """List all available GistSafe projects and environments.
+
+    Displays a table of projects, their environments, and gist URLs.
+    On first run, refreshes the cache from GitHub automatically.
+    """
     if not GITHUB_TOKEN:
         console.print("[red]Error: GITHUB_TOKEN environment variable not set")
         return
